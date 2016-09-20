@@ -8,6 +8,7 @@
 rm(list= ls())
 setwd("~/Desktop/R/ABD/")
 
+# R packages
 require(psych)
 require(polycor)
 require(ggplot2)
@@ -15,6 +16,7 @@ require(lme4)
 require(reshape2)
 require(sas7bdat)
 source("~/Desktop/R/Functions/functions.R")
+
 
 # Read in ABD data ----------------------------------------------------------------------------------------------------------------------------------------------------------
   
