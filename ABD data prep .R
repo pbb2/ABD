@@ -61,7 +61,7 @@ source("~/Desktop/R/Functions/functions.R")
   
   prob_vars <- c(rep(paste0("alcprob",8:17)))
     for (i in 8:17){
-        dat[, paste0("alcprob",i)] <- -9
+        dat[, paste0("alcprob",i)] <- NA
       }
   age_vars  <-c("W1AGE", "W2AGE", "w3age", "w4age")
     for (i in 1:4){
@@ -85,7 +85,7 @@ source("~/Desktop/R/Functions/functions.R")
 
   
 # Combined 
-  alc_vars <- c(init_vars, use_vars, intox_vars)
+  alc_vars <- c(init_vars, use_vars, intox_vars, prob_vars)
   
 # Calculating proportion of endorsement across each age for each alcohol phenotype
 mean <- NULL    
@@ -93,33 +93,53 @@ mean <- NULL
       x <- round(mean(dat[, alc_vars[i]], na.rm = T), 3)
       mean <- rbind(mean, x)
     }
-age <- as.numeric(rep(c(8:17), 3)) 
-pheno <- c(rep("Init", 10), rep("Use", 10), rep("Intox", 10))
-alc_means <- as.data.frame(cbind(pheno, age, mean), row.names = F, stringsAsFactors = F)
+age <- as.numeric(rep(c(8:17), 4)) 
+phenotype <- c(rep("Initiation", 10), rep("Use (past 90 days", 10), rep("Intoxication", 10), rep("Problems", 10))
+alc_means <- as.data.frame(cbind(phenotype, age, mean), row.names = F, stringsAsFactors = F)
 
 ggplot(alc_means, aes(as.numeric(age), as.numeric(V3)))  + 
-  geom_point(aes(colour = pheno, shape = pheno)) +
-  geom_line(aes(group = pheno, colour = pheno)) + 
-    expand_limits(y=c(0,1), x=c(8:17)) + 
+  geom_point(aes(colour = phenotype, shape = phenotype)) +
+  geom_line(aes(group = phenotype, colour = phenotype)) + 
+    expand_limits(y=c(0,.75), x=c(8:17)) + 
     xlab('Age') + 
-    ylab('% Endorsing') 
+    ylab('% Endorsing') + 
+    ggtitle('Alcohol Related Phenotypes from Ages 8 to 17')
     
+
+# Clearing up the work space
+rm(alc_means, checks, mean, noprobs, probs, t1, t2, t3, t4, age, age_vars, i, j, phenotype, wave_vars, adsx_vars, x)  
   
-  
+
 
 # ML growth curve models ----------------------------------------------------------------------------------------------------------------------------
 
 # Reshaping data
-gc_dat <- subset(dat, select = c("FAMNO", 'twid', 'poor', intox_vars[1:10]))
+gc_dat <- subset(dat, select = c("FAMNO", 'twid', 'poor', alc_vars))
 gc_dat$ID <- paste0(gc_dat$FAMNO, gc_dat$twid)
 gc_dat$twid <- NULL
 
-# Using reshape
-# gc_dat_long <- reshape(gc_dat, idvar = c("FAMNO", 'ID'), varying = intox_vars[1:10], v.names = "intox", timevar = "age", times = as.character(c(8:17)), direction = "long")
+# Subsetting, reshaping, and merging across phenotype using reshape2 (HW)
+gc_init <- subset(gc_dat, select = c("FAMNO", 'ID', 'poor', init_vars))
+  gc_init <- melt(gc_init, id.vars = c("FAMNO", "ID", 'poor'), measured = init_vars, variable.name = "age", value.name = "initiation")
+  gc_init$age <- as.numeric(substr(gc_init$age, 5, 6)) # substringing age to numeric value  
+  
+gc_use <- subset(gc_dat, select = c("FAMNO", 'ID', 'poor', use_vars))
+  gc_use <- melt(gc_use, id.vars = c("FAMNO", "ID", 'poor'), measured = use_vars, variable.name = "age", value.name = "use")
+  gc_use$age <- as.numeric(substr(gc_use$age, 5, 6)) # substringing age to numeric value  
+  
+gc_intx <- subset(gc_dat, select = c("FAMNO", 'ID', 'poor', intox_vars))
+  gc_intx <- melt(gc_intx, id.vars = c("FAMNO", "ID", 'poor'), measured = intox_vars, variable.name = "age", value.name = "intox")
+  gc_intx$age <- as.numeric(substr(gc_intx$age, 5, 6)) # substringing age to numeric value  
+  
+gc_prob <- subset(gc_dat, select = c("FAMNO", 'ID', 'poor', prob_vars))
+  gc_prob <- melt(gc_prob, id.vars = c("FAMNO", "ID", 'poor'), measured = prob_vars, variable.name = "age", value.name = "problems")
+  gc_prob$age <- as.numeric(substr(gc_prob$age, 8, 9)) # substringing age to numeric value  
 
-#Using reshape2 (HW)
-gc_dat_long <- melt(gc_dat, id.vars = c("FAMNO", "ID", 'poor'), measured = intox_vars[1:10], variable.name = "age", value.name = "intox")
-gc_dat_long$age <- substr(gc_dat_long$age, 5, 6)
+
+# Merging across phenotype for a single long dataset.  
+gc_dat_long <- Reduce(function(x, y) merge(x, y, by = c("FAMNO", 'ID', 'poor', 'age'), all=TRUE), list(gc_init, gc_use, gc_intx, gc_prob))
+rm(gc_init, gc_use, gc_intx, gc_prob, gc_dat) # cleaning up the global env.
+
 
 #Unconditional model
 glmm1 <- glmer(intox ~ 1 + (1 | ID), family = "binomial", data = gc_dat_long, nAGQ = 10)
