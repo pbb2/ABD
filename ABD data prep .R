@@ -38,8 +38,8 @@ source("~/Desktop/R/Functions/functions.R")
     dat$yafu[is.na(dat$yafu)] <- 0
     dat$tsa[is.na(dat$tsa)] <- 0
     
-    dat$participation <- dat$wave1 + dat$wave2 + dat$wave3 + dat$wave4 + dat$yafu + dat$tsa 
-    table(dat$participation)
+    dat$part <- dat$wave1 + dat$wave2 + dat$wave3 + dat$wave4 + dat$yafu + dat$tsa 
+    table(dat$part)
     
 
 # Graphical display ----------------------------------------------------------------------------------------------------------------------------------------------------------  
@@ -102,9 +102,9 @@ age <- as.numeric(rep(c(8:17), 4))
 phenotype <- c(rep("Initiation", 10), rep("Use (past 90 days", 10), rep("Intoxication", 10), rep("Problems", 10))
 alc_means <- as.data.frame(cbind(phenotype, age, mean), row.names = F, stringsAsFactors = F)
 
-ggplot(alc_means, aes(as.numeric(age), as.numeric(V3)))  + 
-  geom_point(aes(colour = phenotype, shape = phenotype)) +
-  geom_line(aes(group = phenotype, colour = phenotype)) + 
+ggplot(alc_means, aes(as.numeric(age), as.numeric(V3), colour = phenotype))  + 
+  geom_point() +
+  geom_line() + 
     expand_limits(y=c(0,.75), x=c(8:17)) + 
     xlab('Age') + 
     ylab('% Endorsing') + 
@@ -125,33 +125,32 @@ cov_vars <- c("pmon", "ppcon", "pcrel", "pmddxi", "pgadxi", "palcxi", "pintxi", 
               "income", "ksib", "sesyear", "FATQ11", "singleparent", "famsize", "incomelevel", "povertylevel",
               "poor", "t1bwt", "t2bwt", "t1lowbwt", "t2lowbwt", "pregdrink", "pregsmoke", "URBAN_1", "RURAL_1",
               "HIGH1", "COLLEGE1", "POV", "T_WORK", "MINORITY", "HOUSE", "NWORK_M", "UNEMPL_M", "NWORK_W",
-              "UNEMPL_W", "PERCAP", "WPERCAP", "INC_H", "INC_F")
+              "UNEMPL_W", "PERCAP", "WPERCAP", "INC_H", "INC_F", "ZYG", "zyg2", "sex", 'part')
 
 # Reshaping data
 gc_dat <- subset(dat, select = c("FAMNO", 'twid', cov_vars, alc_vars))
 gc_dat$ID <- paste0(gc_dat$FAMNO, gc_dat$twid)
-gc_dat$twid <- NULL
 
 # Subsetting, reshaping, and merging across phenotype using reshape2 (HW)
-gc_init <- subset(gc_dat, select = c("FAMNO", 'ID', cov_vars, init_vars))
-  gc_init <- melt(gc_init, id.vars = c("FAMNO", "ID", cov_vars), measured = init_vars, variable.name = "age", value.name = "initiation")
+gc_init <- subset(gc_dat, select = c("FAMNO", 'twid', 'ID', cov_vars, init_vars))
+  gc_init <- melt(gc_init, id.vars = c("FAMNO", 'twid', "ID", cov_vars), measured = init_vars, variable.name = "age", value.name = "initiation")
   gc_init$age <- as.numeric(substr(gc_init$age, 5, 6)) # substringing age to numeric value  
   
-gc_use <- subset(gc_dat, select = c("FAMNO", 'ID', cov_vars, use_vars))
-  gc_use <- melt(gc_use, id.vars = c("FAMNO", "ID", cov_vars), measured = use_vars, variable.name = "age", value.name = "use")
+gc_use <- subset(gc_dat, select = c("FAMNO", 'twid', 'ID', cov_vars, use_vars))
+  gc_use <- melt(gc_use, id.vars = c("FAMNO", 'twid', "ID", cov_vars), measured = use_vars, variable.name = "age", value.name = "use")
   gc_use$age <- as.numeric(substr(gc_use$age, 5, 6)) # substringing age to numeric value  
   
-gc_intx <- subset(gc_dat, select = c("FAMNO", 'ID', cov_vars, intox_vars))
-  gc_intx <- melt(gc_intx, id.vars = c("FAMNO", "ID", cov_vars), measured = intox_vars, variable.name = "age", value.name = "intox")
+gc_intx <- subset(gc_dat, select = c("FAMNO", 'twid', 'ID', cov_vars, intox_vars))
+  gc_intx <- melt(gc_intx, id.vars = c("FAMNO", 'twid', "ID", cov_vars), measured = intox_vars, variable.name = "age", value.name = "intox")
   gc_intx$age <- as.numeric(substr(gc_intx$age, 5, 6)) # substringing age to numeric value  
   
-gc_prob <- subset(gc_dat, select = c("FAMNO", 'ID', cov_vars, prob_vars))
-  gc_prob <- melt(gc_prob, id.vars = c("FAMNO", "ID", cov_vars), measured = prob_vars, variable.name = "age", value.name = "problems")
+gc_prob <- subset(gc_dat, select = c("FAMNO", 'twid', 'ID', cov_vars, prob_vars))
+  gc_prob <- melt(gc_prob, id.vars = c("FAMNO", 'twid', "ID", cov_vars), measured = prob_vars, variable.name = "age", value.name = "problems")
   gc_prob$age <- as.numeric(substr(gc_prob$age, 8, 9)) # substringing age to numeric value  
 
 
 # Merging across phenotype for a single long dataset.  
-gc_dat_long <- Reduce(function(x, y) merge(x, y, by = c("FAMNO", 'ID', cov_vars, 'age'), all=TRUE), list(gc_init, gc_use, gc_intx, gc_prob))
+gc_dat_long <- Reduce(function(x, y) merge(x, y, by = c("FAMNO", 'ID', 'twid', cov_vars, 'age'), all=TRUE), list(gc_init, gc_use, gc_intx, gc_prob))
 rm(gc_init, gc_use, gc_intx, gc_prob, gc_dat) # cleaning up the global env.
 
 
@@ -159,12 +158,3 @@ rm(gc_init, gc_use, gc_intx, gc_prob, gc_dat) # cleaning up the global env.
 write.csv(gc_dat_long, "~/Desktop/ABD alcohol phenotypes long.csv", row.names = F, na = ".")
 
 
-#Growth models for alcohol use inititation
-  glmm1 <- glmer(initiation ~ 1 + (1 | ID), family = "binomial", data = gc_dat_long, nAGQ = 10)
-  summary(glmm1)
-  
-  glmm2 <- glmer(initiation ~ age + (1 | ID), family = "binomial", data = gc_dat_long, nAGQ = 10)
-  summary(glmm2)
-  
-  glmm3 <- glmer(initiation ~ age + (age | ID), family = binomial(link = "logit"), data = gc_dat_long)
-  summary(glmm3)
